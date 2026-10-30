@@ -1,0 +1,68 @@
+package studentapi;
+
+import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.List;
+import java.util.Map;
+
+@RestController
+public class StudentController {
+    private final StudentRepository repository;
+
+    @Value("${app.version:1.0-37491}")
+    private String version;
+
+    public StudentController(StudentRepository repository) {
+        this.repository = repository;
+    }
+
+    @GetMapping("/api/about")
+    public Map<String, String> about() {
+        return Map.of("name", "Yerkairat", "surname", "Aldiyar", "group", "IT22303", "studentId", "37491", "version", version);
+    }
+
+    @PostMapping("/api/students")
+    @ResponseStatus(HttpStatus.CREATED)
+    public Student create(@Valid @RequestBody StudentRequest request) {
+        if (repository.existsByStudentNumber(request.studentNumber())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Student number already exists");
+        }
+        return repository.save(new Student(request.name(), request.surname(), request.groupCode(), request.studentNumber()));
+    }
+
+    @GetMapping("/api/students")
+    public List<Student> all() { return repository.findAll(); }
+
+    @GetMapping("/api/students/{id}")
+    public Student one(@PathVariable Long id) { return findOr404(id); }
+
+    // Improved CRUD feature: validated full update with duplicate student-number prevention.
+    @PutMapping("/api/students/{id}")
+    public Student update(@PathVariable Long id, @Valid @RequestBody StudentRequest request) {
+        Student student = findOr404(id);
+        if (repository.existsByStudentNumberAndIdNot(request.studentNumber(), id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Student number already exists");
+        }
+        student.setName(request.name());
+        student.setSurname(request.surname());
+        student.setGroupCode(request.groupCode());
+        student.setStudentNumber(request.studentNumber());
+        return repository.save(student);
+    }
+
+    @DeleteMapping("/api/students/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable Long id) {
+        Student student = findOr404(id);
+        repository.delete(student);
+    }
+
+    private Student findOr404(Long id) {
+        return repository.findById(id).orElseThrow(() ->
+            new ResponseStatusException(HttpStatus.NOT_FOUND, "Student not found: " + id));
+    }
+}
